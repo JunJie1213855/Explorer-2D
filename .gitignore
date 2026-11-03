@@ -1,0 +1,64 @@
+# ROS / colcon / catkin build outputs
+build/
+install/
+log/
+devel/
+devel_isolated/
+install_isolated/
+build_isolated/
+.catkin_tools/
+.colcon/
+.ros/
+
+# Python bytecode, environments and package metadata
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.eggs/
+dist/
+
+# Test, coverage and analysis caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# CMake and native compilation outputs
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+compile_commands.json
+*.o
+*.a
+*.so
+*.so.*
+
+# ROS recordings and runtime logs
+*.bag
+*.bag.active
+*.db3
+*.db3-shm
+*.db3-wal
+*.mcap
+*.log
+
+# Local editor and operating-system files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Local environment settings
+.env
+.env.*
+!.env.example
+!.env.template
