@@ -1,0 +1,3 @@
+# Keep the ament resource marker despite src/.gitignore's generic resource rule.
+!resource/
+!resource/explore_grid_benchmark

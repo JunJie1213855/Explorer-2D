@@ -10,6 +10,9 @@ build_isolated/
 .colcon/
 .ros/
 
+# Generated exploration benchmark runs
+/results/grid_benchmark/
+
 # Python bytecode, environments and package metadata
 __pycache__/
 *.py[cod]

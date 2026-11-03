@@ -21,7 +21,8 @@ Explorer-2D/
 │   │   ├── explore/                   # explore_lite 探索节点
 │   │   ├── explore_lite_msgs/         # 探索状态消息
 │   │   └── map_merge/                 # 多机器人地图合并
-│   └── mrtsp_exploration_ros2/        # 地图优化、WFD 与 MRTSP 探索
+│   ├── mrtsp_exploration_ros2/        # 地图优化、WFD 与 MRTSP 探索
+│   └── explore_grid_benchmark/        # 独立二维矩阵探索测试器
 ├── docs/
 │   └── perf_ros2_profiling.md         # perf 采样与火焰图指南
 ├── .gitignore
@@ -38,6 +39,7 @@ Explorer-2D/
 | `explore_lite_msgs` | ROS 消息 | 定义探索状态消息 | — |
 | `multirobot_map_merge` | C++ | 多机器人占用栅格地图合并 | `map_merge` |
 | `mrtsp_exploration_ros2` | Python | 地图优化、WFD 前沿提取和 MRTSP 代价排序 | `mrtsp_explorer` |
+| `explore_grid_benchmark` | Python | 二维矩阵世界、模拟导航与探索指标统计 | `grid_simulator` |
 
 ## 探索算法
 
@@ -150,6 +152,27 @@ ros2 launch multirobot_map_merge map_merge.launch.py
 ```
 
 地图合并需要预先启动各机器人的建图节点，并配置对应的地图命名空间和初始位姿选项。
+
+## 无 Gazebo 的二维矩阵测试
+
+新增的 `src/explore_grid_benchmark/` 通过独立 ROS 接口测试现有探索节点，无需修改探索算法源码，也不需要启动 Gazebo、SLAM 或真实 Nav2。支持 YAML、CSV、NumPy 二维矩阵，提供受墙体遮挡的观测、机器人运动、导航目标执行和指标保存。
+
+```bash
+# 构建测试器与四种探索算法
+colcon build --symlink-install --packages-up-to explore_grid_benchmark \
+  frontier_exploration rrt_explore explore_lite mrtsp_exploration_ros2
+source install/setup.bash
+
+# 单独测试一种算法，可选 frontier / rrt / explore_lite / mrtsp
+ros2 launch explore_grid_benchmark benchmark.launch.py algorithm:=mrtsp rviz:=true
+
+# 依次测试四种算法，每轮重置环境
+ros2 launch explore_grid_benchmark compare.launch.py
+```
+
+通过 `map_file:=/absolute/path/to/map.yaml` 指定地图。矩阵值为 `0`（空闲）与 `100`（墙体），最外圈为墙；未知区域由传感器模型逐步揭示。实验默认使用独立的 ROS domain 71，结果保存到 `results/grid_benchmark/`，包含覆盖率、路径长度、目标状态和轨迹。
+
+模型采用点机器人、四连通 A* 与全向距离观测，测量结果适用于该简化环境。详细输入格式、参数和测试方法见[二维矩阵测试器说明](src/explore_grid_benchmark/README.md)。
 
 ## 文档与当前注意事项
 

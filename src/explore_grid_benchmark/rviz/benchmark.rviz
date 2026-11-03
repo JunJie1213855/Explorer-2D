@@ -1,0 +1,61 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Fixed Frame: map
+    Background Color: 35; 35; 35
+  Displays:
+    - Class: rviz_default_plugins/Map
+      Name: Observed Map
+      Enabled: true
+      Topic:
+        Value: /map
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+      Color Scheme: map
+    - Class: rviz_default_plugins/Path
+      Name: Robot Path
+      Enabled: true
+      Topic:
+        Value: /benchmark/path
+        Durability Policy: Transient Local
+      Color: 255; 170; 0
+      Line Style: Lines
+      Line Width: 0.04
+    - Class: rviz_default_plugins/TF
+      Name: Robot Frames
+      Enabled: true
+      Show Names: false
+      Marker Scale: 0.4
+    - Class: rviz_default_plugins/MarkerArray
+      Name: MRTSP or Explore Lite Frontiers
+      Enabled: true
+      Topic:
+        Value: /explore/frontiers
+    - Class: rviz_default_plugins/Marker
+      Name: Frontier Centroids
+      Enabled: true
+      Topic:
+        Value: /centroid_vis
+    - Class: rviz_default_plugins/Marker
+      Name: RRT Targets
+      Enabled: true
+      Topic:
+        Value: /robot1/frontier_targets
+    - Class: rviz_default_plugins/Marker
+      Name: RRT Tree
+      Enabled: true
+      Topic:
+        Value: /robot1/rrt_segments
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Scale: 90
+      X: 4.1
+      Y: 3.1
+      Angle: 0
+Window Geometry:
+  Width: 1200
+  Height: 850
