@@ -168,9 +168,13 @@ ros2 launch explore_grid_benchmark benchmark.launch.py algorithm:=mrtsp rviz:=tr
 
 # 依次测试四种算法，每轮重置环境
 ros2 launch explore_grid_benchmark compare.launch.py
+
+# 按场景 × 算法批量测试
+ros2 launch explore_grid_benchmark suite.launch.py \
+  scenarios:=open,rooms,corridor,clutter algorithms:=rrt,mrtsp
 ```
 
-通过 `map_file:=/absolute/path/to/map.yaml` 指定地图。矩阵值为 `0`（空闲）与 `100`（墙体），最外圈为墙；未知区域由传感器模型逐步揭示。实验默认使用独立的 ROS domain 71，结果保存到 `results/grid_benchmark/`，包含覆盖率、路径长度、目标状态和轨迹。
+内置 `open`、`rooms`、`corridor`、`clutter` 四个场景，通过 `scenario:=corridor` 选择，或传入自定义场景 YAML 路径。也可通过 `map_file:=/absolute/path/to/map.yaml` 直接指定矩阵地图。矩阵值为 `0`（空闲）与 `100`（墙体），最外圈为墙；未知区域由传感器模型逐步揭示。实验默认使用独立的 ROS domain 71，结果保存到 `results/grid_benchmark/`，包含覆盖率、路径长度、目标状态和轨迹。
 
 模型采用点机器人、四连通 A* 与全向距离观测，测量结果适用于该简化环境。详细输入格式、参数和测试方法见[二维矩阵测试器说明](src/explore_grid_benchmark/README.md)。
 

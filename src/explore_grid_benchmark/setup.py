@@ -9,6 +9,7 @@ setup(
         ('share/' + name, ['package.xml', 'README.md', 'LICENSE']),
         ('share/' + name + '/launch', glob('launch/*.launch.py')),
         ('share/' + name + '/maps', glob('maps/*.yaml')),
+        ('share/' + name + '/scenarios', glob('scenarios/*.yaml')),
         ('share/' + name + '/rviz', glob('rviz/*.rviz')),
     ],
     install_requires=['setuptools'], zip_safe=True,

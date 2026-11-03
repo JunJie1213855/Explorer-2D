@@ -1,0 +1,10 @@
+name: corridor
+description: Three corridor regions connected by alternating doorways.
+map_file: ../maps/corridor.yaml
+simulation:
+  sensor_range: 1.5
+  speed: 0.8
+  angular_speed: 1.5
+  max_duration: 240.0
+  stall_timeout: 60.0
+  coverage_target: 0.98

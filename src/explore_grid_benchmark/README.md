@@ -33,6 +33,54 @@ ros2 launch explore_grid_benchmark benchmark.launch.py algorithm:=explore_lite \
 ROS_DOMAIN_ID=71 ros2 topic echo /benchmark/metrics
 ```
 
+## 多场景配置
+
+场景 YAML 放在 `scenarios/`，将地图路径、起点覆盖值、感知范围、速度和结束条件组织在一起。
+
+| 场景名 | 内容 | 默认最长时间 |
+| --- | --- | --- |
+| `open` | 无内部障碍的空旷房间 | 180 秒 |
+| `rooms` | 带门洞的房间隔断和障碍物，默认场景 | 180 秒 |
+| `corridor` | 通过交错门洞连接的三段走廊区域 | 240 秒 |
+| `clutter` | 四组障碍物形成的遮挡区域 | 180 秒 |
+
+```bash
+# 一个场景、一个算法
+ros2 launch explore_grid_benchmark benchmark.launch.py scenario:=open algorithm:=mrtsp rviz:=true
+
+# 一个场景、全部四种算法
+ros2 launch explore_grid_benchmark compare.launch.py scenario:=corridor
+
+# 多个场景与多个算法依次组合；以下共运行 4 轮
+ros2 launch explore_grid_benchmark suite.launch.py \
+  scenarios:=open,corridor algorithms:=rrt,mrtsp max_duration:=60.0
+```
+
+不传列表时，`suite.launch.py` 默认运行四个场景与四种算法的全部 16 种组合。每轮重置环境，先运行同一场景的各算法，再切换下一场景；总耗时包含所有轮次及进程清理时间。需要短时检查时可显式降低 `max_duration`。
+
+自定义场景示例（与原有地图 YAML 分开）：
+
+```yaml
+name: my_room
+description: 自定义房间配置
+map_file: ../maps/my_room.yaml
+simulation:
+  start_x: 5
+  start_y: 5
+  sensor_range: 1.2
+  speed: 0.6
+  angular_speed: 1.5
+  max_duration: 240.0
+  stall_timeout: 60.0
+  coverage_target: 0.98
+```
+
+`map_file` 相对场景 YAML 所在目录解析，起点仍为 `[列, 行]`。可通过 `scenario:=/absolute/path/to/my_scene.yaml` 使用外部场景，无需重新构建。批量测试的 `scenarios` 列表也支持逗号分隔的外部场景 YAML 路径，路径本身不能含逗号。
+
+参数优先级为 **显式 launch 参数 > 场景 simulation 配置 > 测试器默认值**。例如 `scenario:=corridor sensor_range:=2.0` 覆盖走廊场景的感知范围；显式 `map_file` 会覆盖场景地图，在 suite 中对所有轮次生效。`resolution`、`start_x`、`start_y` 未指定时继续使用地图元数据。
+
+每轮结果目录格式为 `场景名_算法名_时间戳_随机后缀`，`summary.json` 包含场景名、场景文件路径及实际生效参数。内置预设修改后需要重新构建；个人配置可保存在外部 YAML。
+
 ## 输入矩阵
 
 支持 YAML、CSV、NumPy `.npy`，其中矩阵值为 `0`（空闲）或 `100`（墙体）。真实地图不含 `-1`；未知区域由模拟观测生成。最外圈必须为墙体，至少 3×3。机器人起点必须为空闲格。
@@ -73,6 +121,7 @@ CSV/NPY 无元数据时默认分辨率为 0.2、起点为 `[1, 1]`。launch 中 
 | launch 参数 | 默认值 | 说明 |
 | --- | --- | --- |
 | `algorithm` | `mrtsp` | 运行的探索算法 |
+| `scenario` | `rooms` | 内置场景名或外部场景 YAML 路径 |
 | `map_file` | 内置 `rooms.yaml` | 矩阵文件绝对路径 |
 | `sensor_range` | `1.5` | 观测半径，米 |
 | `speed` | `0.8` | 平移速度，米/秒 |
@@ -84,6 +133,8 @@ CSV/NPY 无元数据时默认分辨率为 0.2、起点为 `[1, 1]`。launch 中 
 | `results_dir` | 当前目录下 `results/grid_benchmark` | 结果根目录 |
 | `rviz` | `false` | 打开 RViz |
 | `domain_id` | `71` | 测试专用 ROS domain |
+
+参数表中的数值描述默认 `rooms` 场景的生效值；选择其他场景时以场景配置为准。
 
 覆盖率 = 已观测的起点可达空闲格 / 真实地图中起点四连通可达空闲格。真实地图只用于观测、碰撞检查、覆盖率计算及调试显示，不用于规划和前沿提取。
 
@@ -124,4 +175,4 @@ ROS_DOMAIN_ID=75 EXPLORER_ROS_TESTS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
 
 不修改各探索包源码；本包只通过 ROS 接口、节点参数和重映射接入现有算法。
 
-当前验证范围：ROS 2 Humble 下 12 项栅格与 ROS 接口测试通过；四种算法均进行了短时接口与运动接入检查，安装后的顺序 launch 已完整运行并生成四份结果。短时检查用于验证接入，不作为算法性能排名；RViz 配置尚未进行桌面显示验证。
+验证包含栅格模型、场景读取与覆盖优先级、批量任务展开及 ROS 动作接口。四种算法均进行了短时接口与运动接入检查；短时检查用于验证接入，不作为算法性能排名，RViz 配置尚未进行桌面显示验证。

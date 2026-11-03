@@ -3,6 +3,7 @@ import csv
 from datetime import datetime
 import json
 import math
+import re
 from pathlib import Path
 import threading
 import time
@@ -29,7 +30,7 @@ class GridSimulator(Node):
     def __init__(self):
         super().__init__('grid_simulator')
         defaults = {
-            'map_file': '', 'algorithm': 'none', 'resolution': 0.0,
+            'map_file': '', 'algorithm': 'none', 'scenario': 'custom', 'scenario_file': '', 'resolution': 0.0,
             'start_x': -1, 'start_y': -1, 'sensor_range': 1.5,
             'speed': 0.8, 'angular_speed': 1.5, 'inflation_radius': 0.0,
             'max_duration': 180.0, 'stall_timeout': 45.0,
@@ -38,6 +39,8 @@ class GridSimulator(Node):
         self.settings = {key: self.declare_parameter(key, value).value
                          for key, value in defaults.items()}
         s = self.settings
+        if not re.fullmatch(r'[A-Za-z0-9_-]+', s['scenario']):
+            raise ValueError('scenario must be a name containing only letters, digits, underscores or hyphens')
         for key in ('sensor_range', 'speed', 'angular_speed', 'max_duration', 'stall_timeout'):
             if not math.isfinite(s[key]) or s[key] <= 0:
                 raise ValueError(f'{key} must be finite and positive')
@@ -70,7 +73,7 @@ class GridSimulator(Node):
         self.last_trajectory = 0.0
         stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.output = (Path(s['results_dir']).expanduser().resolve()
-                       / f"{s['algorithm']}_{stamp}_{uuid.uuid4().hex[:6]}")
+                       / f"{s['scenario']}_{s['algorithm']}_{stamp}_{uuid.uuid4().hex[:6]}")
         self.output.mkdir(parents=True, exist_ok=False)
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.map_pub = self.create_publisher(OccupancyGrid, '/map', latched)
@@ -305,7 +308,8 @@ class GridSimulator(Node):
                 if goal['status'] == 'active':
                     goal['status'] = 'interrupted'
             summary = {
-                'algorithm': self.settings['algorithm'], 'stop_reason': self.reason,
+                'algorithm': self.settings['algorithm'], 'scenario': self.settings['scenario'],
+                'stop_reason': self.reason,
                 'settings': self.settings, 'map_file': str(Path(self.settings['map_file']).resolve()),
                 'grid_shape': list(self.world.truth.shape),
                 'resolution': self.world.resolution, 'start_cell': list(self.world.start),

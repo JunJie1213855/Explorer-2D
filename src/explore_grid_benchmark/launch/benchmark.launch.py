@@ -10,22 +10,28 @@ from launch.events import Shutdown, matches_action
 from launch.events.process import ShutdownProcess
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from explore_grid_benchmark.scenarios import DEFAULTS, resolve_scenario, suite_jobs
 
 
 def configure(context, sequence=None, include_rviz=True):
-    value = lambda name: LaunchConfiguration(name).perform(context)
+    argument = lambda name: LaunchConfiguration(name).perform(context)
     share = Path(get_package_share_directory('explore_grid_benchmark'))
-    algorithm = sequence[0] if sequence else value('algorithm')
-    params = {'map_file': value('map_file'), 'algorithm': algorithm, 'use_sim_time': False,
-              'results_dir': value('results_dir')}
-    for key in ('resolution', 'sensor_range', 'speed', 'angular_speed', 'inflation_radius',
-                'max_duration', 'stall_timeout', 'coverage_target'):
-        params[key] = float(value(key))
-    for key in ('start_x', 'start_y'):
-        params[key] = int(value(key))
+    job = sequence[0] if sequence else {'algorithm': argument('algorithm')}
+    if isinstance(job, str):
+        job = {'algorithm': job}
+    algorithm = job['algorithm']
+    resolved = resolve_scenario(job.get('scenario', argument('scenario')), share,
+                                {key: argument(key) for key in ('map_file', *DEFAULTS)})
+    value = lambda name: resolved[name] if name in resolved else argument(name)
+    params = {**resolved, 'algorithm': algorithm, 'use_sim_time': False,
+              'results_dir': argument('results_dir')}
     simulator = Node(package='explore_grid_benchmark', executable='grid_simulator',
                      parameters=[params], output='screen')
-    actions = [simulator]
+    # Bound cleanup as well as simulation time, so a stuck ROS teardown cannot
+    # hold every later scenario indefinitely. Completed processes ignore this.
+    watchdog = TimerAction(period=params['max_duration'] + 5.0, actions=[
+        EmitEvent(event=ShutdownProcess(process_matcher=matches_action(simulator)))])
+    actions = [simulator, watchdog]
     common = {'use_sim_time': False, 'robot_base_frame': 'base_footprint'}
     remaps = [('/tf', '/tf'), ('/tf_static', '/tf_static')]
     if algorithm == 'frontier':
@@ -52,7 +58,8 @@ def configure(context, sequence=None, include_rviz=True):
     elif algorithm == 'mrtsp':
         config = Path(get_package_share_directory('mrtsp_exploration_ros2')) / 'config/params.yaml'
         explorer = Node(package='mrtsp_exploration_ros2', executable='mrtsp_explorer',
-                        name='mrtsp_explorer', parameters=[str(config), common], output='screen')
+                        name='mrtsp_explorer', parameters=[str(config), common,
+                            {'sensor_effective_range_m': float(value('sensor_range'))}], output='screen')
     else:
         explorer = None
     if explorer:
@@ -104,29 +111,50 @@ def _map_resolution(path):
     return 0.2
 
 
-def generate_launch_description(sequence=None):
+def generate_launch_description(sequence=None, suite=False):
     share = Path(get_package_share_directory('explore_grid_benchmark'))
     arguments = [
         DeclareLaunchArgument('algorithm', default_value='mrtsp',
                               choices=['frontier', 'rrt', 'explore_lite', 'mrtsp', 'none']),
-        DeclareLaunchArgument('map_file', default_value=str(share / 'maps/rooms.yaml')),
-        DeclareLaunchArgument('resolution', default_value='0.0', description='0 uses map metadata or 0.2 m/cell'),
-        DeclareLaunchArgument('start_x', default_value='-1', description='Start column; -1 uses map metadata'),
-        DeclareLaunchArgument('start_y', default_value='-1', description='Start row; -1 uses map metadata'),
-        DeclareLaunchArgument('sensor_range', default_value='1.5'),
-        DeclareLaunchArgument('speed', default_value='0.8'),
-        DeclareLaunchArgument('angular_speed', default_value='1.5'),
-        DeclareLaunchArgument('inflation_radius', default_value='0.0'),
-        DeclareLaunchArgument('max_duration', default_value='180.0'),
-        DeclareLaunchArgument('stall_timeout', default_value='45.0'),
-        DeclareLaunchArgument('coverage_target', default_value='0.98'),
+        DeclareLaunchArgument('scenario', default_value='rooms',
+                              description='Preset name or scenario YAML path'),
+        DeclareLaunchArgument('map_file', default_value='', description='Override scenario map'),
+        DeclareLaunchArgument('resolution', default_value='', description='Override scenario resolution; 0 uses map metadata'),
+        DeclareLaunchArgument('start_x', default_value='', description='Override start column; -1 uses map metadata'),
+        DeclareLaunchArgument('start_y', default_value='', description='Override start row; -1 uses map metadata'),
+        DeclareLaunchArgument('sensor_range', default_value='', description='Override scenario sensor_range'),
+        DeclareLaunchArgument('speed', default_value='', description='Override scenario speed'),
+        DeclareLaunchArgument('angular_speed', default_value='', description='Override scenario angular_speed'),
+        DeclareLaunchArgument('inflation_radius', default_value='', description='Override scenario inflation_radius'),
+        DeclareLaunchArgument('max_duration', default_value='', description='Override scenario max_duration'),
+        DeclareLaunchArgument('stall_timeout', default_value='', description='Override scenario stall_timeout'),
+        DeclareLaunchArgument('coverage_target', default_value='', description='Override scenario coverage_target'),
         DeclareLaunchArgument('results_dir', default_value=str(Path.cwd() / 'results/grid_benchmark')),
         DeclareLaunchArgument('rviz', default_value='false', choices=['true', 'false']),
         DeclareLaunchArgument('domain_id', default_value='71', description='Dedicated ROS domain for this benchmark'),
     ]
-    if sequence:
+    if sequence or suite:
         arguments = arguments[1:]
+    if suite:
+        arguments.extend([
+            DeclareLaunchArgument('scenarios', default_value='open,rooms,corridor,clutter',
+                                  description='Comma-separated preset names or YAML paths'),
+            DeclareLaunchArgument('algorithms', default_value='frontier,rrt,explore_lite,mrtsp'),
+        ])
+
+    def start(context):
+        jobs = suite_jobs(LaunchConfiguration('scenarios').perform(context),
+                          LaunchConfiguration('algorithms').perform(context)) if suite else sequence
+        # Validate all scenario files before starting a suite, including later runs.
+        if jobs:
+            for job in jobs:
+                selection = job.get('scenario', LaunchConfiguration('scenario').perform(context)) \
+                    if isinstance(job, dict) else LaunchConfiguration('scenario').perform(context)
+                resolve_scenario(selection, share, {
+                    key: LaunchConfiguration(key).perform(context) for key in ('map_file', *DEFAULTS)})
+        return configure(context, sequence=jobs)
+
     return LaunchDescription(arguments + [
         SetEnvironmentVariable('ROS_DOMAIN_ID', LaunchConfiguration('domain_id')),
-        OpaqueFunction(function=lambda context: configure(context, sequence=sequence)),
+        OpaqueFunction(function=start),
     ])
