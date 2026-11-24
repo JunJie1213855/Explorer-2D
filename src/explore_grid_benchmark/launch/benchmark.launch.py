@@ -61,8 +61,7 @@ def configure(context, sequence=None, include_rviz=True):
                         name='mrtsp_explorer', parameters=[str(config), common,
                             {'sensor_effective_range_m': float(value('sensor_range'))}], output='screen')
     elif algorithm in ('hgvd', 'hgvd_cpp'):
-        package = 'hgvd_exploration_cpp' if algorithm == 'hgvd_cpp' else 'hgvd_exploration_ros2'
-        explorer = Node(package=package, executable='hgvd_explorer',
+        explorer = Node(package='hgvd_exploration', executable='hgvd_explorer',
                         parameters=[common, {'obstacle_clearance_m': float(value('inflation_radius'))}],
                         output='screen')
     else:
@@ -102,7 +101,7 @@ def configure(context, sequence=None, include_rviz=True):
             on_exit=[EmitEvent(event=Shutdown(reason='Grid benchmark finished'))])))
     if include_rviz and value('rviz').lower() == 'true':
         if algorithm in ('hgvd', 'hgvd_cpp'):
-            config = Path(get_package_share_directory(package)) / 'rviz/hgvd.rviz'
+            config = Path(get_package_share_directory('hgvd_exploration')) / 'rviz/hgvd.rviz'
         else:
             config = share / 'rviz/benchmark.rviz'
         actions.append(Node(package='rviz2', executable='rviz2',

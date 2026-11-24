@@ -9,14 +9,14 @@
 ```bash
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install --packages-up-to explore_grid_benchmark \
-  frontier_exploration rrt_explore explore_lite mrtsp_exploration_ros2
+  frontier_exploration rrt_explore explore_lite mrtsp_exploration_ros2 hgvd_exploration
 source install/setup.bash
 ros2 launch explore_grid_benchmark benchmark.launch.py algorithm:=mrtsp rviz:=true
 ```
 
-`algorithm` 支持 `frontier`、`rrt`、`explore_lite`、`mrtsp`、`hgvd`（Python）和 `hgvd_cpp`（C++）。`none` 仅启动模拟器，用于检查地图和接口。每次只启动一个算法。无需手动启用 RRT。
+`algorithm` 支持 `frontier`、`rrt`、`explore_lite`、`mrtsp` 和 `hgvd`（C++，包名 `hgvd_exploration`）。`hgvd_cpp` 仍可作为同一实现的兼容别名。`none` 仅启动模拟器，用于检查地图和接口。每次只启动一个算法。无需手动启用 RRT。
 
-也可以用一个 launch 顺序测试全部四种算法，每轮重置地图与起点：
+也可以用一个 launch 顺序测试默认的四种算法（`frontier`、`rrt`、`explore_lite`、`mrtsp`），每轮重置地图与起点：
 
 ```bash
 ros2 launch explore_grid_benchmark compare.launch.py max_duration:=180.0 rviz:=true
@@ -48,15 +48,15 @@ ROS_DOMAIN_ID=71 ros2 topic echo /benchmark/metrics
 # 一个场景、一个算法
 ros2 launch explore_grid_benchmark benchmark.launch.py scenario:=open algorithm:=mrtsp rviz:=true
 
-# 一个场景、全部四种算法
+# 一个场景、默认的四种算法
 ros2 launch explore_grid_benchmark compare.launch.py scenario:=corridor
 
 # 多个场景与多个算法依次组合；以下共运行 4 轮
 ros2 launch explore_grid_benchmark suite.launch.py \
-  scenarios:=open,corridor algorithms:=rrt,mrtsp max_duration:=60.0
+  scenarios:=open,corridor algorithms:=mrtsp,hgvd max_duration:=60.0
 ```
 
-不传列表时，`suite.launch.py` 默认运行四个场景与四种算法的全部 16 种组合。每轮重置环境，先运行同一场景的各算法，再切换下一场景；总耗时包含所有轮次及进程清理时间。需要短时检查时可显式降低 `max_duration`。
+不传列表时，`suite.launch.py` 默认运行四个场景与默认四种算法的 16 种组合。要测试 HGVD，请在 `algorithms` 中显式加入 `hgvd`。每轮重置环境，先运行同一场景的各算法，再切换下一场景；总耗时包含所有轮次及进程清理时间。需要短时检查时可显式降低 `max_duration`。
 
 自定义场景示例（与原有地图 YAML 分开）：
 
@@ -152,9 +152,9 @@ CSV/NPY 无元数据时默认分辨率为 0.2、起点为 `[1, 1]`。launch 中 
 - `goals.csv`：接收的导航目标及最终状态；非法请求会被拒绝，不计入此表。
 - `observed.npy`：结束时的已观测地图（含 `-1` 未知格）。
 
-`/map` 是算法输入，`/global_costmap/costmap` 与 `/local_costmap/costmap` 是观测代价地图；`/benchmark/truth` 仅用于人工调试，不应重映射到算法输入。RViz 默认显示观测地图、运动轨迹、机器人坐标系和各算法前沿。
+`/map` 是算法输入，`/global_costmap/costmap` 与 `/local_costmap/costmap` 是观测代价地图；`/benchmark/truth` 仅用于人工调试，不应重映射到算法输入。使用 `rviz:=true` 时，HGVD 使用专用配置显示地图和拓扑图层；其它算法使用测试器视图。
 
-对比时保持同一地图、起点、感知、速度和结束条件，逐一运行四种算法，比较覆盖率曲线、路径长度、失败次数与结束原因。耗时是本简化环境中的墙钟时间，包含转向、运动及计算等待；不等同真实机器人性能。RRT 的随机初始化由原算法决定，本测试器不提供可控随机种子，建议重复实验。
+对比时保持同一地图、起点、感知、速度和结束条件，逐一运行待比较的算法，比较覆盖率曲线、路径长度、失败次数与结束原因。耗时是本简化环境中的墙钟时间，包含转向、运动及计算等待；不等同真实机器人性能。RRT 的随机初始化由原算法决定，本测试器不提供可控随机种子，建议重复实验。
 
 ## 验证
 
@@ -175,4 +175,4 @@ ROS_DOMAIN_ID=75 EXPLORER_ROS_TESTS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
 
 不修改各探索包源码；本包只通过 ROS 接口、节点参数和重映射接入现有算法。
 
-验证包含栅格模型、场景读取与覆盖优先级、批量任务展开及 ROS 动作接口。四种算法均进行了短时接口与运动接入检查；短时检查用于验证接入，不作为算法性能排名，RViz 配置尚未进行桌面显示验证。
+验证包含栅格模型、场景读取与覆盖优先级、批量任务展开及 ROS 动作接口。短时接口和运动检查用于验证接入，性能比较应使用同一场景设置重复运行。
