@@ -77,6 +77,17 @@ Explorer-2D/
 
 该实现采用贪心求解，不保证 MRTSP 全局最优。模块还提供前沿、选中目标和优化地图的调试话题，以及地图处理、前沿检测、代价计算和目标切换等测试文件。
 
+### HGVD 探索与耗时对比
+
+HGVD 用分层广义 Voronoi 图表示已知空闲区域的通行关系，并按拓扑距离和朝向代价选择可达前沿，再由 Nav2 执行。这个分支同时提供 Python 和 C++ 实现。
+
+| 规划轮耗时 | Python | C++ | Python / C++ |
+| --- | ---: | ---: | ---: |
+| P50（中位数） | 22.02 ms | 1.32 ms | 16.6× |
+| P95 | 86.51 ms | 6.09 ms | 14.2× |
+
+数字来自两次历史运行，样本数分别为 525 和 258，反映的是节点规划延迟。分阶段结果、原始直方图、CSV 和复测命令见 [HGVD 耗时对比](docs/hgvd_timing/README.md)。
+
 ## 环境与依赖
 
 - **ROS 2**：多数子项目以 Humble 为基础；MRTSP 上游标注 Jazzy，本仓库快速上手文档记录了 Humble 适配过程。各模块兼容范围需分别核对。
@@ -162,8 +173,6 @@ ros2 launch hgvd_exploration_cpp explore.launch.py use_sim_time:=true rviz:=true
 ```
 
 两个版本都支持 `return_to_start:=true`、`navigation_enabled:=false` 和 `timing_csv`。接口和参数见 [Python 版 README](src/hgvd-exploration/README.md) 和 [C++ 版 README](src/hgvd-exploration-cpp/README.md)。
-
-历史记录中，规划轮 P50 从 Python 的 **22.02 ms** 降至 C++ 的 **1.32 ms**，P95 从 **86.51 ms** 降至 **6.09 ms**。两次记录的样本数不同。原始直方图、CSV、分阶段结果和复测命令见 [HGVD 耗时对比](docs/hgvd_timing/README.md)。
 
 **多机器人地图合并：**
 
