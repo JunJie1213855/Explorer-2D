@@ -10,7 +10,7 @@ from launch.events import Shutdown, matches_action
 from launch.events.process import ShutdownProcess
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from explore_grid_benchmark.scenarios import DEFAULTS, resolve_scenario, suite_jobs
+from explore_grid_benchmark.scenarios import ALGORITHMS, DEFAULTS, resolve_scenario, suite_jobs
 
 
 def configure(context, sequence=None, include_rviz=True):
@@ -60,6 +60,10 @@ def configure(context, sequence=None, include_rviz=True):
         explorer = Node(package='mrtsp_exploration_ros2', executable='mrtsp_explorer',
                         name='mrtsp_explorer', parameters=[str(config), common,
                             {'sensor_effective_range_m': float(value('sensor_range'))}], output='screen')
+    elif algorithm == 'hgvd':
+        explorer = Node(package='hgvd_exploration_ros2', executable='hgvd_explorer',
+                        parameters=[common, {'obstacle_clearance_m': float(value('inflation_radius'))}],
+                        output='screen')
     else:
         explorer = None
     if explorer:
@@ -115,7 +119,7 @@ def generate_launch_description(sequence=None, suite=False):
     share = Path(get_package_share_directory('explore_grid_benchmark'))
     arguments = [
         DeclareLaunchArgument('algorithm', default_value='mrtsp',
-                              choices=['frontier', 'rrt', 'explore_lite', 'mrtsp', 'none']),
+                              choices=[*ALGORITHMS, 'none']),
         DeclareLaunchArgument('scenario', default_value='rooms',
                               description='Preset name or scenario YAML path'),
         DeclareLaunchArgument('map_file', default_value='', description='Override scenario map'),

@@ -1,6 +1,6 @@
 # Explorer-2D
 
-基于 ROS 2 的二维移动机器人自主探索工作区，集成占用栅格前沿探索、RRT 探索、轻量前沿探索和 MRTSP 探索，以及多机器人地图合并功能，便于开展算法学习、仿真调试与探索策略对比。
+基于 ROS 2 的二维移动机器人自主探索工作区，集成占用栅格前沿探索、RRT 探索、轻量前沿探索、MRTSP 探索和 HGVD 拓扑探索，以及多机器人地图合并功能，便于开展算法学习、仿真调试与探索策略对比。
 
 前沿（Frontier）是地图中已知空闲区域与未知区域的交界。探索节点根据地图选择下一个目标，由 Nav2 完成路径规划、避障和运动控制；SLAM 持续更新地图，形成探索闭环。
 
@@ -22,6 +22,7 @@ Explorer-2D/
 │   │   ├── explore_lite_msgs/         # 探索状态消息
 │   │   └── map_merge/                 # 多机器人地图合并
 │   ├── mrtsp_exploration_ros2/        # 地图优化、WFD 与 MRTSP 探索
+│   ├── hgvd-exploration/              # HGVD 拓扑探索与 ROS 2 移植
 │   └── explore_grid_benchmark/        # 独立二维矩阵探索测试器
 ├── docs/
 │   └── perf_ros2_profiling.md         # perf 采样与火焰图指南
@@ -39,6 +40,7 @@ Explorer-2D/
 | `explore_lite_msgs` | ROS 消息 | 定义探索状态消息 | — |
 | `multirobot_map_merge` | C++ | 多机器人占用栅格地图合并 | `map_merge` |
 | `mrtsp_exploration_ros2` | Python | 地图优化、WFD 前沿提取和 MRTSP 代价排序 | `mrtsp_explorer` |
+| `hgvd_exploration_ros2` | Python | 分层 GVD 拓扑探索 | `hgvd_explorer` |
 | `explore_grid_benchmark` | Python | 二维矩阵世界、模拟导航与探索指标统计 | `grid_simulator` |
 
 ## 探索算法
@@ -145,6 +147,16 @@ ros2 launch mrtsp_exploration_ros2 explore.launch.py use_sim_time:=true
 
 MRTSP 默认参数位于 `src/mrtsp_exploration_ros2/config/params.yaml`，也可以通过 `params_file:=/absolute/path/to/params.yaml` 指定参数文件。
 
+**HGVD 拓扑探索：**
+
+```bash
+ros2 launch hgvd_exploration_ros2 explore.launch.py use_sim_time:=true
+```
+
+Gazebo 与 SLAM、Nav2 联调时，使用上面的探索节点入口。下文的 `benchmark.launch.py` 会启动自己的矩阵世界和导航动作服务器。
+
+HGVD 使用分层广义 Voronoi 图、带连通性约束的聚类和拓扑距离选择可达前沿视点。地图、TF、Nav2 接口和参数见[HGVD 说明](src/hgvd-exploration/README.md)。
+
 **多机器人地图合并：**
 
 ```bash
@@ -163,7 +175,7 @@ colcon build --symlink-install --packages-up-to explore_grid_benchmark \
   frontier_exploration rrt_explore explore_lite mrtsp_exploration_ros2
 source install/setup.bash
 
-# 单独测试一种算法，可选 frontier / rrt / explore_lite / mrtsp
+# 单独测试一种算法，可选 frontier / rrt / explore_lite / mrtsp / hgvd（HGVD 需构建 hgvd_exploration_ros2）
 ros2 launch explore_grid_benchmark benchmark.launch.py algorithm:=mrtsp rviz:=true
 
 # 依次测试四种算法，每轮重置环境

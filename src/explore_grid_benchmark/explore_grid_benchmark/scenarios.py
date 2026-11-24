@@ -14,7 +14,7 @@ DEFAULTS = {
     'inflation_radius': 0.0, 'max_duration': 180.0,
     'stall_timeout': 45.0, 'coverage_target': 0.98,
 }
-ALGORITHMS = ('frontier', 'rrt', 'explore_lite', 'mrtsp')
+ALGORITHMS = ('frontier', 'rrt', 'explore_lite', 'mrtsp', 'hgvd')
 
 
 def resolve_scenario(selection, share, overrides=None):
