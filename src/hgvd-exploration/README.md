@@ -64,6 +64,21 @@ ros2 launch hgvd_exploration_ros2 explore.launch.py use_sim_time:=true rviz:=tru
 
 可在 RViz 的 **HGVD Topology → Namespaces** 中独立开关图层。A* 拓扑连边只连接图中的两个端点，机器人实际行驶路线看 **Nav2 Global Plan**。已有 RViz 窗口时，也可以打开软件包里的 `rviz/hgvd.rviz`，或单独添加 `/hgvd_explorer/topology`（MarkerArray）和 `/hgvd_explorer/goal_marker`（Marker）。
 
+### 分阶段计时
+
+使用新文件名记录耗时。若文件已存在，请重新生成文件名。
+
+```bash
+HGVD_CSV="$PWD/results/hgvd_timing/python_$(date +%Y%m%d_%H%M%S_%N).csv"
+ros2 launch hgvd_exploration_ros2 explore.launch.py \
+  use_sim_time:=true rviz:=true timing_csv:="$HGVD_CSV"
+
+# 停止节点后绘图，需要 Matplotlib 和 NumPy
+python3 src/hgvd-exploration/scripts/plot_timings.py "$HGVD_CSV"
+```
+
+原始图、CSV 和统一设置下的复测命令见 [Python / C++ 耗时对比](../../docs/hgvd_timing/README.md)。
+
 ### 二维基准测试
 
 无需 Gazebo、SLAM 或实际 Nav2 即可测试 ROS 接口：

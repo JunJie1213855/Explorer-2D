@@ -20,20 +20,22 @@ ros2 launch hgvd_exploration_cpp explore.launch.py \
   use_sim_time:=true rviz:=true return_to_start:=true
 ```
 
-`rviz` 和 `return_to_start` 默认关闭。`navigation_enabled:=false` 只预览图层。返航前要求没有活跃目标且连续 `completion_hold_s` 秒无可达前沿。Python 和 C++ 节点使用相同的目标动作和图层话题，同一个机器人一次使用一个版本。
+`rviz` 和 `return_to_start` 默认关闭。`navigation_enabled:=false` 只预览图层。启用返航后，节点在没有活跃目标且连续 `completion_hold_s` 秒（默认 5 秒）没有可达前沿时尝试返回本轮起点。距离过滤或失败冷却后暂时没有候选目标，仍可能存在可达前沿。Python 和 C++ 节点使用相同的目标动作和图层话题，同一个机器人一次使用一个版本。
 
 当 SLAM 暂时将机器人所在格标为未知时，`unknown_start_search_m`（默认 0.25 米）允许从附近已知空闲格锚定拓扑。目标距离仍按真实 TF 位姿计算，导航仍由 Nav2 执行。设为 0 可关闭此行为。
 
 记录各阶段的壁钟耗时并沿用现有绘图脚本。测量纯规划时可将 `rviz` 和 `visualize` 都设为 `false`，这样也会停止生成 Marker：
 
 ```bash
-HGVD_CSV="$PWD/results/hgvd_timing/cpp_$(date +%Y%m%d_%H%M%S).csv"
+HGVD_CSV="$PWD/results/hgvd_timing/cpp_$(date +%Y%m%d_%H%M%S_%N).csv"
 ros2 launch hgvd_exploration_cpp explore.launch.py \
   use_sim_time:=true rviz:=false visualize:=false timing_csv:="$HGVD_CSV"
 
 # 退出节点后绘图，需要 python3-matplotlib
 python3 src/hgvd-exploration/scripts/plot_timings.py "$HGVD_CSV"
 ```
+
+已有计时文件会保留，每次运行使用新路径。原始图、CSV 和阶段统计见 [Python / C++ 耗时对比](../../docs/hgvd_timing/README.md)。
 
 使用矩阵测试器比较两个版本：
 
@@ -44,3 +46,9 @@ ROS_LOCALHOST_ONLY=1 RMW_IMPLEMENTATION=rmw_cyclonedds_cpp \
 ```
 
 运行对比前也需要构建 `hgvd_exploration_ros2`。可用 `benchmark.launch.py algorithm:=hgvd_cpp` 只运行 C++ 版。
+
+## 源码结构
+
+- `include/planner.h`、`src/planner.cpp` 处理地图、GVD、拓扑图和视点评分。
+- `include/spatial_index.h`、`src/spatial_index.cpp` 实现二维 KD 树。
+- `src/explorer.cpp` 接入 ROS 2 地图、TF、Nav2、RViz 和 CSV 计时。

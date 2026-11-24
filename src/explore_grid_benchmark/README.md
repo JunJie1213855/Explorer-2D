@@ -9,14 +9,15 @@
 ```bash
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install --packages-up-to explore_grid_benchmark \
-  frontier_exploration rrt_explore explore_lite mrtsp_exploration_ros2
+  frontier_exploration rrt_explore explore_lite mrtsp_exploration_ros2 \
+  hgvd_exploration_ros2 hgvd_exploration_cpp --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 ros2 launch explore_grid_benchmark benchmark.launch.py algorithm:=mrtsp rviz:=true
 ```
 
 `algorithm` 支持 `frontier`、`rrt`、`explore_lite`、`mrtsp`、`hgvd`（Python）和 `hgvd_cpp`（C++）。`none` 仅启动模拟器，用于检查地图和接口。每次只启动一个算法。无需手动启用 RRT。
 
-也可以用一个 launch 顺序测试全部四种算法，每轮重置地图与起点：
+也可以用一个 launch 顺序测试默认四种算法（`frontier`、`rrt`、`explore_lite`、`mrtsp`），每轮重置地图与起点：
 
 ```bash
 ros2 launch explore_grid_benchmark compare.launch.py max_duration:=180.0 rviz:=true
@@ -33,6 +34,14 @@ ros2 launch explore_grid_benchmark benchmark.launch.py algorithm:=explore_lite \
 ROS_DOMAIN_ID=71 ros2 topic echo /benchmark/metrics
 ```
 
+要在同一场景对比两个 HGVD 版本，显式选择 `hgvd` 和 `hgvd_cpp`。两轮会重置地图和机器人起点。
+
+```bash
+ros2 launch explore_grid_benchmark suite.launch.py scenarios:=rooms algorithms:=hgvd,hgvd_cpp
+```
+
+矩阵测试输出覆盖率、路径长度和导航目标统计。节点内部各阶段的直方图和计时方法另见 [HGVD 耗时对比](../../docs/hgvd_timing/README.md)。
+
 ## 多场景配置
 
 场景 YAML 放在 `scenarios/`，将地图路径、起点覆盖值、感知范围、速度和结束条件组织在一起。
@@ -48,7 +57,7 @@ ROS_DOMAIN_ID=71 ros2 topic echo /benchmark/metrics
 # 一个场景、一个算法
 ros2 launch explore_grid_benchmark benchmark.launch.py scenario:=open algorithm:=mrtsp rviz:=true
 
-# 一个场景、全部四种算法
+# 一个场景、默认四种算法
 ros2 launch explore_grid_benchmark compare.launch.py scenario:=corridor
 
 # 多个场景与多个算法依次组合；以下共运行 4 轮
@@ -56,7 +65,7 @@ ros2 launch explore_grid_benchmark suite.launch.py \
   scenarios:=open,corridor algorithms:=rrt,mrtsp max_duration:=60.0
 ```
 
-不传列表时，`suite.launch.py` 默认运行四个场景与四种算法的全部 16 种组合。每轮重置环境，先运行同一场景的各算法，再切换下一场景；总耗时包含所有轮次及进程清理时间。需要短时检查时可显式降低 `max_duration`。
+不传列表时，`suite.launch.py` 默认运行四个场景与默认四种算法的 16 种组合。每轮重置环境，先运行同一场景的各算法，再切换下一场景；总耗时包含所有轮次及进程清理时间。需要短时检查时可显式降低 `max_duration`。
 
 自定义场景示例（与原有地图 YAML 分开）：
 
@@ -154,7 +163,7 @@ CSV/NPY 无元数据时默认分辨率为 0.2、起点为 `[1, 1]`。launch 中 
 
 `/map` 是算法输入，`/global_costmap/costmap` 与 `/local_costmap/costmap` 是观测代价地图；`/benchmark/truth` 仅用于人工调试，不应重映射到算法输入。RViz 默认显示观测地图、运动轨迹、机器人坐标系和各算法前沿。
 
-对比时保持同一地图、起点、感知、速度和结束条件，逐一运行四种算法，比较覆盖率曲线、路径长度、失败次数与结束原因。耗时是本简化环境中的墙钟时间，包含转向、运动及计算等待；不等同真实机器人性能。RRT 的随机初始化由原算法决定，本测试器不提供可控随机种子，建议重复实验。
+对比时保持同一地图、起点、感知、速度和结束条件，逐一运行待比较的算法，比较覆盖率曲线、路径长度、失败次数与结束原因。耗时是本简化环境中的墙钟时间，包含转向、运动及计算等待；不等同真实机器人性能。RRT 的随机初始化由原算法决定，本测试器不提供可控随机种子，建议重复实验。
 
 ## 验证
 

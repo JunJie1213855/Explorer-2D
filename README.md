@@ -22,7 +22,8 @@ Explorer-2D/
 │   │   ├── explore_lite_msgs/         # 探索状态消息
 │   │   └── map_merge/                 # 多机器人地图合并
 │   ├── mrtsp_exploration_ros2/        # 地图优化、WFD 与 MRTSP 探索
-│   ├── hgvd-exploration/              # HGVD 拓扑探索与 ROS 2 移植
+│   ├── hgvd-exploration/              # HGVD Python 版
+│   ├── hgvd-exploration-cpp/          # HGVD C++ 版
 │   └── explore_grid_benchmark/        # 独立二维矩阵探索测试器
 ├── docs/
 │   └── perf_ros2_profiling.md         # perf 采样与火焰图指南
@@ -148,17 +149,21 @@ ros2 launch mrtsp_exploration_ros2 explore.launch.py use_sim_time:=true
 
 MRTSP 默认参数位于 `src/mrtsp_exploration_ros2/config/params.yaml`，也可以通过 `params_file:=/absolute/path/to/params.yaml` 指定参数文件。
 
-**HGVD 拓扑探索：**
+**HGVD 拓扑探索（Python / C++）：**
+
+同一台机器人每次选择一个版本。先启动 Gazebo 或实机、SLAM 和 Nav2。
 
 ```bash
-ros2 launch hgvd_exploration_ros2 explore.launch.py use_sim_time:=true
+# Python
+ros2 launch hgvd_exploration_ros2 explore.launch.py use_sim_time:=true rviz:=true
+
+# C++
+ros2 launch hgvd_exploration_cpp explore.launch.py use_sim_time:=true rviz:=true
 ```
 
-Gazebo 与 SLAM、Nav2 联调时，使用上面的探索节点入口。下文的 `benchmark.launch.py` 会启动自己的矩阵世界和导航动作服务器。
+两个版本都支持 `return_to_start:=true`、`navigation_enabled:=false` 和 `timing_csv`。接口和参数见 [Python 版 README](src/hgvd-exploration/README.md) 和 [C++ 版 README](src/hgvd-exploration-cpp/README.md)。
 
-HGVD 使用分层广义 Voronoi 图、带连通性约束的聚类和拓扑距离选择可达前沿视点。地图、TF、Nav2 接口和参数见[HGVD 说明](src/hgvd-exploration/README.md)。
-
-C++ 版本可通过 `ros2 launch hgvd_exploration_cpp explore.launch.py use_sim_time:=true rviz:=true` 启动。构建、计时和矩阵对比命令见 [HGVD C++ 说明](src/hgvd-exploration-cpp/README.md)。
+历史记录中，规划轮 P50 从 Python 的 **22.02 ms** 降至 C++ 的 **1.32 ms**，P95 从 **86.51 ms** 降至 **6.09 ms**。两次记录的样本数不同。原始直方图、CSV、分阶段结果和复测命令见 [HGVD 耗时对比](docs/hgvd_timing/README.md)。
 
 **多机器人地图合并：**
 
@@ -173,20 +178,21 @@ ros2 launch multirobot_map_merge map_merge.launch.py
 新增的 `src/explore_grid_benchmark/` 通过独立 ROS 接口测试现有探索节点，无需修改探索算法源码，也不需要启动 Gazebo、SLAM 或真实 Nav2。支持 YAML、CSV、NumPy 二维矩阵，提供受墙体遮挡的观测、机器人运动、导航目标执行和指标保存。
 
 ```bash
-# 构建测试器与四种探索算法
+# 构建测试器和示例中的探索包
 colcon build --symlink-install --packages-up-to explore_grid_benchmark \
-  frontier_exploration rrt_explore explore_lite mrtsp_exploration_ros2
+  frontier_exploration rrt_explore explore_lite mrtsp_exploration_ros2 \
+  hgvd_exploration_ros2 hgvd_exploration_cpp --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 
-# 单独测试一种算法，可选 frontier / rrt / explore_lite / mrtsp / hgvd（HGVD 需构建 hgvd_exploration_ros2）
+# 单独测试一种算法，可选 frontier / rrt / explore_lite / mrtsp / hgvd / hgvd_cpp
 ros2 launch explore_grid_benchmark benchmark.launch.py algorithm:=mrtsp rviz:=true
 
-# 依次测试四种算法，每轮重置环境
+# 依次测试默认的四种算法，每轮重置环境
 ros2 launch explore_grid_benchmark compare.launch.py
 
-# 按场景 × 算法批量测试
+# 在同一场景依次测试两个 HGVD 版本
 ros2 launch explore_grid_benchmark suite.launch.py \
-  scenarios:=open,rooms,corridor,clutter algorithms:=rrt,mrtsp
+  scenarios:=rooms algorithms:=hgvd,hgvd_cpp
 ```
 
 内置 `open`、`rooms`、`corridor`、`clutter` 四个场景，通过 `scenario:=corridor` 选择，或传入自定义场景 YAML 路径。也可通过 `map_file:=/absolute/path/to/map.yaml` 直接指定矩阵地图。矩阵值为 `0`（空闲）与 `100`（墙体），最外圈为墙；未知区域由传感器模型逐步揭示。实验默认使用独立的 ROS domain 71，结果保存到 `results/grid_benchmark/`，包含覆盖率、路径长度、目标状态和轨迹。
