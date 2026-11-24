@@ -27,6 +27,16 @@ ros2 launch hgvd_exploration_ros2 explore.launch.py use_sim_time:=true robot_bas
 
 可用 ROS 参数调整 `local_radius_m`（5.0）、`local_sample_stride`（2 格）、`global_sample_stride`（8 格）、`cluster_bandwidth_m`（2.0）、`frontier_spacing_m`（0.6）、`obstacle_clearance_m`（0.0）、`min_goal_distance_m`（0.35）及 `goal_switch_margin_m`（1.0）。默认障碍净距为零，方便运行点机器人基准测试，可根据实体机器人和 Nav2 的安全距离配置调整。目标拒绝、失败或超时后会暂时跳过对应目标。若自定义了 Nav2 的 `xy_goal_tolerance`，将 `min_goal_distance_m` 设为略大于该值，避免导航器在原地宣布到达。
 
+### 探索结束后返回起点
+
+```bash
+ros2 launch hgvd_exploration_ros2 explore.launch.py use_sim_time:=true return_to_start:=true rviz:=true
+```
+
+`return_to_start` 默认关闭。启用后，节点记录首次获得有效地图和 TF 时的坐标及航向。在没有正在执行的探索目标、且连续 `completion_hold_s` 秒（默认 5 秒）没有可达前沿时，HGVD 将该位姿交给 Nav2。地图的栅格原点或尺寸变化时，仍使用记录的地图坐标。
+
+距离过滤或失败目标冷却造成的暂时空闲不会触发返航。返航目标失败后按 `failed_goal_retry_s` 间隔重试，最多派发 3 次。预览模式不派发返航目标。
+
 ### RViz 可视化
 
 使用 `rviz:=true` 随探索节点打开专用视图。默认值为 `false`。

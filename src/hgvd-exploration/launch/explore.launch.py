@@ -19,6 +19,10 @@ def generate_launch_description():
         DeclareLaunchArgument('navigate_action', default_value='navigate_to_pose'),
         DeclareLaunchArgument('navigation_enabled', default_value='true',
                               description='Send Nav2 goals; set false to preview HGVD only'),
+        DeclareLaunchArgument('return_to_start', default_value='false', choices=['true', 'false'],
+                              description='Return to the initial pose when exploration finishes'),
+        DeclareLaunchArgument('completion_hold_s', default_value='5.0',
+                              description='Seconds without reachable frontiers before returning'),
         DeclareLaunchArgument('min_goal_distance_m', default_value='0.35',
                               description='Minimum viewpoint distance from the robot in meters'),
         Node(
@@ -32,6 +36,12 @@ def generate_launch_description():
                 'navigate_action': LaunchConfiguration('navigate_action'),
                 'navigation_enabled': ParameterValue(
                     LaunchConfiguration('navigation_enabled'), value_type=bool,
+                ),
+                'return_to_start': ParameterValue(
+                    LaunchConfiguration('return_to_start'), value_type=bool,
+                ),
+                'completion_hold_s': ParameterValue(
+                    LaunchConfiguration('completion_hold_s'), value_type=float,
                 ),
                 'min_goal_distance_m': ParameterValue(
                     LaunchConfiguration('min_goal_distance_m'), value_type=float,

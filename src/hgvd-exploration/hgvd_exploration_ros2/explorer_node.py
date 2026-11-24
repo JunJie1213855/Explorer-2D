@@ -62,6 +62,7 @@ class HgvdExplorer(Node):
             'obstacle_clearance_m': 0.0, 'occupied_threshold': 65,
             'min_goal_distance_m': 0.35, 'goal_switch_margin_m': 1.0, 'goal_timeout_s': 120.0,
             'failed_goal_retry_s': 30.0, 'visualize': True, 'navigation_enabled': True,
+            'return_to_start': False, 'completion_hold_s': 5.0,
         }
         params = {name: self.declare_parameter(name, value).value
                   for name, value in defaults.items()}
@@ -86,6 +87,13 @@ class HgvdExplorer(Node):
         self.goal_handle = None
         self.goal_pose = None
         self.canceling = False
+        self.start_pose = None
+        self.frontier_free_since = None
+        self.exploration_complete = False
+        self.returning = False
+        self.return_done = False
+        self.return_attempts = 0
+        self.return_retry_at = 0.0
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.nav = (ActionClient(self, NavigateToPose, params['navigate_action'])
@@ -127,6 +135,8 @@ class HgvdExplorer(Node):
         self.planner.update_map(grid, geometry.resolution)
 
     def _plan(self):
+        if self.return_done:
+            return
         if self.geometry is None:
             self.get_logger().info('Waiting for occupancy grid', throttle_duration_sec=10.0)
             return
@@ -134,32 +144,54 @@ class HgvdExplorer(Node):
         if self.goal is not None:
             if self.goal_handle is not None:
                 self._publish_goal_marker(self.goal_pose)
-            if self.goal_revision != self.map_revision:
+            if (self.goal_pose.header.frame_id != self.geometry.frame
+                    or (not self.returning and self.goal_revision != self.map_revision)):
                 self._cancel()
                 return
             if now - self.goal_sent_at > self.params['goal_timeout_s']:
-                if not self.canceling:
+                if not self.canceling and not self.returning:
                     self.excluded[self.goal] = now + self.params['failed_goal_retry_s']
                 self._cancel()
+                return
+            if self.returning:
                 return
         try:
             tf = self.tf_buffer.lookup_transform(
                 self.geometry.frame, self.params['robot_base_frame'], Time(),
             ).transform
         except TransformException as error:
+            self.frontier_free_since = None
             self.get_logger().info(f'Waiting for robot TF: {error}', throttle_duration_sec=10.0)
             return
 
         x, y = tf.translation.x, tf.translation.y
         yaw = yaw_of(tf.rotation)
         if not all(isfinite(v) for v in (x, y, yaw)):
+            self.frontier_free_since = None
             return
         robot_position = self.geometry.grid_position(x, y)
         robot = tuple(floor(value + 0.5) for value in robot_position)
         if not self.planner.update_topology(robot):
+            self.frontier_free_since = None
             self.get_logger().debug(f'Robot cell {robot} is outside known traversable space',
                                     throttle_duration_sec=5.0)
             return
+        if self.nav is not None and self.params['return_to_start']:
+            if self.start_pose is None:
+                self.start_pose = (self.geometry.frame, x, y, yaw)
+            if self.exploration_complete:
+                self._return_to_start(robot, now)
+                return
+            if self.goal is not None or self.planner.frontiers.any():
+                self.frontier_free_since = None
+            elif self.frontier_free_since is None or now < self.frontier_free_since:
+                self.frontier_free_since = now
+            elif now - self.frontier_free_since >= self.params['completion_hold_s']:
+                self.exploration_complete = True
+                self.get_logger().info('Exploration complete; returning to the start pose')
+                self._return_to_start(robot, now)
+                return
+
         self.excluded = {cell: until for cell, until in self.excluded.items() if until > now}
         active = self.goal
         if active is not None:
@@ -194,13 +226,41 @@ class HgvdExplorer(Node):
         elif target != active and costs[active] - costs[target] > self.params['goal_switch_margin_m']:
             self._cancel()
 
-    def _send(self, cell, robot, now):
+    def _return_to_start(self, robot, now):
+        if self.markers is not None:
+            self._publish_markers(set())
+        if now < self.return_retry_at:
+            return
+        frame, x, y, _ = self.start_pose
+        if self.geometry.frame != frame:
+            self.get_logger().warn('Waiting for the recorded start map frame',
+                                   throttle_duration_sec=10.0)
+            return
+        cell = tuple(floor(value + 0.5) for value in self.geometry.grid_position(x, y))
+        if not self.planner.links.contains(cell):
+            self.get_logger().warn('Start pose is outside reachable free space',
+                                   throttle_duration_sec=10.0)
+            return
+        if not self.nav.server_is_ready():
+            self.get_logger().info('Waiting for NavigateToPose to return to the start',
+                                   throttle_duration_sec=10.0)
+            return
+        self.return_attempts += 1
+        self._send(cell, robot, now, returning=True)
+
+    def _send(self, cell, robot, now, *, returning=False):
         goal = NavigateToPose.Goal()
-        goal.pose.header.frame_id = self.geometry.frame
+        if returning:
+            frame, x, y, yaw = self.start_pose
+        else:
+            frame = self.geometry.frame
+            x, y = self.geometry.cell_center(cell)
+            yaw = atan2(cell[1] - robot[1], cell[0] - robot[0]) + self.geometry.yaw
+        goal.pose.header.frame_id = frame
         goal.pose.header.stamp = self.get_clock().now().to_msg()
-        goal.pose.pose.position.x, goal.pose.pose.position.y = self.geometry.cell_center(cell)
-        yaw = atan2(cell[1] - robot[1], cell[0] - robot[0]) + self.geometry.yaw
+        goal.pose.pose.position.x, goal.pose.pose.position.y = x, y
         goal.pose.pose.orientation.z, goal.pose.pose.orientation.w = sin(yaw / 2), cos(yaw / 2)
+        self.returning = returning
         self.goal = cell
         self.goal_pose = goal.pose
         self.goal_revision = self.map_revision
@@ -222,7 +282,10 @@ class HgvdExplorer(Node):
             self._finish(None, str(error))
             return
         self._publish_goal_marker(self.goal_pose)
-        self.get_logger().info(f'Navigating to HGVD viewpoint {self.goal}')
+        if self.returning:
+            self.get_logger().info('Navigating back to the recorded start pose')
+        else:
+            self.get_logger().info(f'Navigating to HGVD viewpoint {self.goal}')
 
     def _cancel(self):
         if self.goal_handle is None or self.canceling:
@@ -254,8 +317,18 @@ class HgvdExplorer(Node):
 
     def _finish(self, status, error=None):
         cell = self.goal
-        if self.goal_revision == self.map_revision:
-            now = self.get_clock().now().nanoseconds / 1e9
+        now = self.get_clock().now().nanoseconds / 1e9
+        if self.returning:
+            if status == GoalStatus.STATUS_SUCCEEDED:
+                self.return_done = True
+                self.get_logger().info('Returned to the start pose')
+            elif self.return_attempts >= 3:
+                self.return_done = True
+                self.get_logger().warn(f'Could not return to the start after 3 attempts: {error or status}')
+            else:
+                self.return_retry_at = now + self.params['failed_goal_retry_s']
+                self.get_logger().warn(f'Return to the start failed; will retry: {error or status}')
+        elif self.goal_revision == self.map_revision:
             if status == GoalStatus.STATUS_SUCCEEDED:
                 self.excluded[cell] = now + 2.0
             elif status != GoalStatus.STATUS_CANCELED or not self.canceling:
@@ -263,6 +336,7 @@ class HgvdExplorer(Node):
                 self.get_logger().warn(f'HGVD goal {cell} failed: {error or status}')
         self._publish_goal_marker(None)
         self.goal = self.goal_handle = self.goal_pose = None
+        self.returning = False
         self.canceling = False
 
     def _marker(self, namespace, kind, rgb, alpha=1.0, *, frame=None):
