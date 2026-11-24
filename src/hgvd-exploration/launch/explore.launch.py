@@ -13,6 +13,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         DeclareLaunchArgument('map_topic', default_value='/map'),
+        DeclareLaunchArgument('visualize', default_value='true', choices=['true', 'false'],
+                              description='Publish HGVD marker topics'),
         DeclareLaunchArgument('timing_csv', default_value='',
                               description='Record stage timings to a new CSV file'),
         DeclareLaunchArgument('rviz', default_value='false', choices=['true', 'false'],
@@ -25,15 +27,18 @@ def generate_launch_description():
                               description='Return to the initial pose when exploration finishes'),
         DeclareLaunchArgument('completion_hold_s', default_value='5.0',
                               description='Seconds without reachable frontiers before returning'),
+        DeclareLaunchArgument('unknown_start_search_m', default_value='0.25',
+                              description='Bounded search for a free cell near an unknown robot pose'),
         DeclareLaunchArgument('min_goal_distance_m', default_value='0.35',
                               description='Minimum viewpoint distance from the robot in meters'),
         Node(
-            package='hgvd_exploration_ros2',
+            package='hgvd_exploration',
             executable='hgvd_explorer',
             output='screen',
             parameters=[{
                 'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
                 'map_topic': LaunchConfiguration('map_topic'),
+                'visualize': ParameterValue(LaunchConfiguration('visualize'), value_type=bool),
                 'robot_base_frame': LaunchConfiguration('robot_base_frame'),
                 'navigate_action': LaunchConfiguration('navigate_action'),
                 'navigation_enabled': ParameterValue(
@@ -46,6 +51,9 @@ def generate_launch_description():
                     LaunchConfiguration('completion_hold_s'), value_type=float,
                 ),
                 'timing_csv': ParameterValue(LaunchConfiguration('timing_csv'), value_type=str),
+                'unknown_start_search_m': ParameterValue(
+                    LaunchConfiguration('unknown_start_search_m'), value_type=float,
+                ),
                 'min_goal_distance_m': ParameterValue(
                     LaunchConfiguration('min_goal_distance_m'), value_type=float,
                 ),
@@ -53,7 +61,7 @@ def generate_launch_description():
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
-                FindPackageShare('hgvd_exploration_ros2'), 'launch', 'rviz.launch.py',
+                FindPackageShare('hgvd_exploration'), 'launch', 'rviz.launch.py',
             ])),
             condition=IfCondition(LaunchConfiguration('rviz')),
             launch_arguments={

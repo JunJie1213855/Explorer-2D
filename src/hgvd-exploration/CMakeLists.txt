@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(hgvd_exploration_cpp)
+project(hgvd_exploration)
 find_package(ament_cmake REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc)
 foreach(dependency rclcpp rclcpp_action geometry_msgs nav_msgs nav2_msgs tf2 tf2_ros visualization_msgs)

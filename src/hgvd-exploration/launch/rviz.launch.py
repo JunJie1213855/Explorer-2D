@@ -10,7 +10,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
-    share = Path(get_package_share_directory('hgvd_exploration_ros2'))
+    share = Path(get_package_share_directory('hgvd_exploration'))
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         DeclareLaunchArgument('fixed_frame', default_value='map'),
