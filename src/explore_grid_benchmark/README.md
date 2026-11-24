@@ -14,7 +14,7 @@ source install/setup.bash
 ros2 launch explore_grid_benchmark benchmark.launch.py algorithm:=mrtsp rviz:=true
 ```
 
-`algorithm` 支持 `frontier`、`rrt`、`explore_lite`、`mrtsp`；`none` 仅启动模拟器，用于检查地图和接口。每次只启动一个算法。无需手动启用 RRT。
+`algorithm` 支持 `frontier`、`rrt`、`explore_lite`、`mrtsp`、`hgvd`（Python）和 `hgvd_cpp`（C++）。`none` 仅启动模拟器，用于检查地图和接口。每次只启动一个算法。无需手动启用 RRT。
 
 也可以用一个 launch 顺序测试全部四种算法，每轮重置地图与起点：
 

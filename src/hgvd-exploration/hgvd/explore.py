@@ -1,5 +1,6 @@
 """Select reachable exploration viewpoints using the HGVD topology."""
 from collections import defaultdict
+from contextlib import nullcontext
 from math import atan2, ceil, dist, pi
 
 import numpy as np
@@ -14,7 +15,8 @@ from .utils import Connectivity, denoise
 
 class Planner:
     def __init__(self, local_radius_m, local_stride, global_stride, bandwidth_m,
-                 clearance_m, frontier_spacing_m):
+                 clearance_m, frontier_spacing_m, *, measure=nullcontext):
+        self.measure = measure
         self.local_radius_m = local_radius_m
         self.local_stride = local_stride
         self.global_stride = global_stride
@@ -28,16 +30,18 @@ class Planner:
         self.graph = {}
 
     def update_map(self, grid, resolution):
-        self.clean = denoise(grid, self.grid, self.clean if self.grid is not None else None)
+        with self.measure('map_denoise'):
+            self.clean = denoise(grid, self.grid, self.clean if self.grid is not None else None)
         self.grid = grid
         self.resolution = resolution
-        traversable = grid == 0
-        if np.any(grid == 100):
-            self.clearance = ndimage.distance_transform_edt(grid != 100) * resolution
-        else:
-            self.clearance = np.full(grid.shape, np.inf)
-        traversable &= self.clearance + 1e-6 >= self.clearance_m
-        self.components, _ = ndimage.label(traversable, structure=CROSS)
+        with self.measure('map_connectivity'):
+            traversable = grid == 0
+            if np.any(grid == 100):
+                self.clearance = ndimage.distance_transform_edt(grid != 100) * resolution
+            else:
+                self.clearance = np.full(grid.shape, np.inf)
+            traversable &= self.clearance + 1e-6 >= self.clearance_m
+            self.components, _ = ndimage.label(traversable, structure=CROSS)
         self.sample_origin = None
 
     def update_topology(self, robot):
@@ -55,14 +59,18 @@ class Planner:
         self.component = component
         self.reachable = self.components == component
         self.links = Connectivity(self.reachable)
-        self.samples = sample_gvd(self.grid, self.clean, self.reachable, robot,
-                                  ceil(self.local_radius_m / self.resolution),
-                                  self.local_stride, self.global_stride)
+        with self.measure('gvd_sampling'):
+            self.samples = sample_gvd(self.grid, self.clean, self.reachable, robot,
+                                      ceil(self.local_radius_m / self.resolution),
+                                      self.local_stride, self.global_stride)
         cells = [sample.cell for sample in self.samples]
-        self.centers = mean_shift(cells, self.links, self.bandwidth_m / self.resolution)
-        self.graph = build_topology(cells, self.centers, self.links)
-        self.frontiers = frontier_cells(self.grid, self.reachable)
-        self.wall_neighbor = ndimage.binary_dilation(self.grid == 100, structure=np.ones((5, 5)))
+        with self.measure('mean_shift'):
+            self.centers = mean_shift(cells, self.links, self.bandwidth_m / self.resolution)
+        with self.measure('topology_graph'):
+            self.graph = build_topology(cells, self.centers, self.links)
+        with self.measure('frontier_detection'):
+            self.frontiers = frontier_cells(self.grid, self.reachable)
+            self.wall_neighbor = ndimage.binary_dilation(self.grid == 100, structure=np.ones((5, 5)))
         return True
 
     def viewpoints(self, robot, excluded, min_distance_m=0.0, *, robot_position=None):

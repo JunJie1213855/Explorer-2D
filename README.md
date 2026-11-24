@@ -41,6 +41,7 @@ Explorer-2D/
 | `multirobot_map_merge` | C++ | 多机器人占用栅格地图合并 | `map_merge` |
 | `mrtsp_exploration_ros2` | Python | 地图优化、WFD 前沿提取和 MRTSP 代价排序 | `mrtsp_explorer` |
 | `hgvd_exploration_ros2` | Python | 分层 GVD 拓扑探索 | `hgvd_explorer` |
+| `hgvd_exploration_cpp` | C++ | HGVD 核心与 ROS 2 / Nav2 节点 | `hgvd_explorer` |
 | `explore_grid_benchmark` | Python | 二维矩阵世界、模拟导航与探索指标统计 | `grid_simulator` |
 
 ## 探索算法
@@ -156,6 +157,8 @@ ros2 launch hgvd_exploration_ros2 explore.launch.py use_sim_time:=true
 Gazebo 与 SLAM、Nav2 联调时，使用上面的探索节点入口。下文的 `benchmark.launch.py` 会启动自己的矩阵世界和导航动作服务器。
 
 HGVD 使用分层广义 Voronoi 图、带连通性约束的聚类和拓扑距离选择可达前沿视点。地图、TF、Nav2 接口和参数见[HGVD 说明](src/hgvd-exploration/README.md)。
+
+C++ 版本可通过 `ros2 launch hgvd_exploration_cpp explore.launch.py use_sim_time:=true rviz:=true` 启动。构建、计时和矩阵对比命令见 [HGVD C++ 说明](src/hgvd-exploration-cpp/README.md)。
 
 **多机器人地图合并：**
 

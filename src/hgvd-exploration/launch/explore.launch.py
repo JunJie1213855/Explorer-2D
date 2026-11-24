@@ -13,6 +13,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         DeclareLaunchArgument('map_topic', default_value='/map'),
+        DeclareLaunchArgument('timing_csv', default_value='',
+                              description='Record stage timings to a new CSV file'),
         DeclareLaunchArgument('rviz', default_value='false', choices=['true', 'false'],
                               description='Open the HGVD RViz visualization'),
         DeclareLaunchArgument('robot_base_frame', default_value='base_link'),
@@ -43,6 +45,7 @@ def generate_launch_description():
                 'completion_hold_s': ParameterValue(
                     LaunchConfiguration('completion_hold_s'), value_type=float,
                 ),
+                'timing_csv': ParameterValue(LaunchConfiguration('timing_csv'), value_type=str),
                 'min_goal_distance_m': ParameterValue(
                     LaunchConfiguration('min_goal_distance_m'), value_type=float,
                 ),

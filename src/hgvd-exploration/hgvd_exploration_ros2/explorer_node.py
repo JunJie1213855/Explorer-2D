@@ -1,4 +1,5 @@
 """ROS 2 map, TF and NavigateToPose adapter for HGVD."""
+from contextlib import nullcontext
 from dataclasses import dataclass
 from functools import partial
 from math import atan2, cos, floor, isfinite, sin, tau
@@ -19,6 +20,8 @@ from tf2_ros import Buffer, TransformException, TransformListener
 from visualization_msgs.msg import Marker, MarkerArray
 
 from hgvd.explore import Planner
+
+from .timing import TimingCsv
 
 RING_ANGLES = tuple(index * tau / 32 for index in range(32))
 
@@ -62,7 +65,7 @@ class HgvdExplorer(Node):
             'obstacle_clearance_m': 0.0, 'occupied_threshold': 65,
             'min_goal_distance_m': 0.35, 'goal_switch_margin_m': 1.0, 'goal_timeout_s': 120.0,
             'failed_goal_retry_s': 30.0, 'visualize': True, 'navigation_enabled': True,
-            'return_to_start': False, 'completion_hold_s': 5.0,
+            'return_to_start': False, 'completion_hold_s': 5.0, 'timing_csv': '',
         }
         params = {name: self.declare_parameter(name, value).value
                   for name, value in defaults.items()}
@@ -76,9 +79,14 @@ class HgvdExplorer(Node):
         if params['occupied_threshold'] > 100:
             raise ValueError('occupied_threshold must be at most 100')
         self.params = params
+        self.timing = TimingCsv(params['timing_csv']) if params['timing_csv'] else None
+        self.measure = self.timing.measure if self.timing is not None else nullcontext
+        if self.timing is not None:
+            self.get_logger().info(f'Recording HGVD timings to {self.timing.path}')
         self.planner = Planner(
             params['local_radius_m'], params['local_sample_stride'], params['global_sample_stride'],
             params['cluster_bandwidth_m'], params['obstacle_clearance_m'], params['frontier_spacing_m'],
+            measure=self.measure,
         )
         self.geometry = None
         self.map_revision = 0
@@ -108,7 +116,12 @@ class HgvdExplorer(Node):
         self.goal_marker = (self.create_publisher(Marker, '~/goal_marker', latched)
                             if params['visualize'] else None)
         self.marker_lifetime = Duration(seconds=max(5.0, 3 * params['planning_period_s'])).to_msg()
-        self.create_timer(params['planning_period_s'], self._plan)
+        callback = self._timed_plan if self.timing is not None else self._plan
+        self.create_timer(params['planning_period_s'], callback)
+
+    def _timed_plan(self):
+        with self.measure('planning_tick_total'):
+            self._plan()
 
     def _on_map(self, msg):
         info = msg.info
@@ -121,9 +134,10 @@ class HgvdExplorer(Node):
                 or geometry.resolution <= 0 or len(msg.data) != geometry.width * geometry.height):
             self.get_logger().warn('Ignoring invalid occupancy grid', throttle_duration_sec=5.0)
             return
-        raw = np.asarray(msg.data, dtype=np.int8).reshape(geometry.height, geometry.width)
-        grid = np.where(raw >= self.params['occupied_threshold'], 100,
-                        np.where(raw == 0, 0, -1)).astype(np.int8)
+        with self.measure('map_decode'):
+            raw = np.asarray(msg.data, dtype=np.int8).reshape(geometry.height, geometry.width)
+            grid = np.where(raw >= self.params['occupied_threshold'], 100,
+                            np.where(raw == 0, 0, -1)).astype(np.int8)
         if geometry == self.geometry:
             if np.array_equal(self.planner.grid, grid):
                 return
@@ -201,10 +215,11 @@ class HgvdExplorer(Node):
             if self.goal_handle is None or self.canceling:
                 return
 
-        targets = set(self.planner.viewpoints(
-            robot, self.excluded, self.params['min_goal_distance_m'],
-            robot_position=robot_position,
-        ))
+        with self.measure('viewpoint_selection'):
+            targets = set(self.planner.viewpoints(
+                robot, self.excluded, self.params['min_goal_distance_m'],
+                robot_position=robot_position,
+            ))
         if self.markers is not None:
             self._publish_markers(targets)
         if not targets:
@@ -214,9 +229,10 @@ class HgvdExplorer(Node):
             return
         if self.nav is None:
             return
-        costs = dict(self.planner.scores(robot, yaw - self.geometry.yaw,
-                                        targets | ({active} if active is not None else set())))
-        target = min(targets, key=lambda cell: (costs[cell], cell))
+        with self.measure('goal_scoring'):
+            costs = dict(self.planner.scores(robot, yaw - self.geometry.yaw,
+                                            targets | ({active} if active is not None else set())))
+            target = min(targets, key=lambda cell: (costs[cell], cell))
         if active is None:
             if self.nav.server_is_ready():
                 self._send(target, robot, now)
@@ -266,7 +282,8 @@ class HgvdExplorer(Node):
         self.goal_revision = self.map_revision
         self.goal_sent_at = now
         try:
-            self.nav.send_goal_async(goal).add_done_callback(self._on_goal_response)
+            with self.measure('nav2_goal_dispatch'):
+                self.nav.send_goal_async(goal).add_done_callback(self._on_goal_response)
         except (RuntimeError, ValueError) as error:
             self._finish(None, str(error))
 
@@ -350,6 +367,10 @@ class HgvdExplorer(Node):
         return marker
 
     def _publish_markers(self, targets):
+        with self.measure('rviz_markers'):
+            self._publish_topology_markers(targets)
+
+    def _publish_topology_markers(self, targets):
         graph = self.planner.graph
         direct_edges, astar_links = [], []
         for first, neighbors in graph.items():
@@ -402,6 +423,8 @@ class HgvdExplorer(Node):
         self.goal_marker.publish(marker)
 
     def destroy_node(self):
+        if self.timing is not None:
+            self.timing.close()
         if self.nav is not None:
             self.nav.destroy()
         super().destroy_node()
