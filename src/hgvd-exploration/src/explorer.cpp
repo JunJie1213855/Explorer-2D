@@ -116,7 +116,6 @@ public:
     return_enabled_ = declare_parameter("return_to_start", false);
     const bool visualize = declare_parameter("visualize", true);
     period_ = numeric_parameter("planning_period_s", 0.5);
-    completion_hold_ = numeric_parameter("completion_hold_s", 5.0);
     start_search_ = numeric_parameter("unknown_start_search_m", 0.25, true);
     min_distance_ = numeric_parameter("min_goal_distance_m", 0.35, true);
     switch_margin_ = numeric_parameter("goal_switch_margin_m", 1.0, true);
@@ -236,10 +235,6 @@ private:
     planner_->update_map(next.width, next.height, next.resolution, std::move(grid), changed);
     if (changed)
     {
-      if (geometry_ && geometry_->frame != next.frame)
-      {
-        frontier_free_since_.reset();
-      }
       ++map_revision_;
       excluded_.clear();
     }
@@ -292,7 +287,6 @@ private:
     }
     catch (const tf2::TransformException &error)
     {
-      frontier_free_since_.reset();
       RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 10000, "Waiting for TF: %s", error.what());
       return;
     }
@@ -300,7 +294,6 @@ private:
     const double yaw = yaw_of(transform.transform.rotation);
     if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(yaw))
     {
-      frontier_free_since_.reset();
       return;
     }
     const auto [gx, gy] = geometry_->grid_position(x, y);
@@ -308,7 +301,6 @@ private:
     const auto robot = pose_cell ? planner_->start_cell(*pose_cell, gx, gy, start_search_) : std::nullopt;
     if (!robot || !planner_->update(*robot))
     {
-      frontier_free_since_.reset();
       RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 10000,
                            "Robot pose is outside known traversable space");
       return;
@@ -327,22 +319,6 @@ private:
       if (!anchored && !start_pose_)
       {
         start_pose_ = make_pose(point(x, y), yaw);
-      }
-      if (!exploration_complete_)
-      {
-        if (anchored || active_ || planner_->has_frontiers())
-        {
-          frontier_free_since_.reset();
-        }
-        else if (!frontier_free_since_ || now < *frontier_free_since_)
-        {
-          frontier_free_since_ = now;
-        }
-        else if (now - *frontier_free_since_ >= completion_hold_)
-        {
-          exploration_complete_ = true;
-          RCLCPP_INFO(get_logger(), "Exploration complete; returning to the start pose");
-        }
       }
       if (exploration_complete_)
       {
@@ -386,6 +362,20 @@ private:
       {
         RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 10000,
                              "No reachable HGVD viewpoints meet the goal filters");
+        if (nav_ && return_enabled_)
+        {
+          if (start_pose_)
+          {
+            exploration_complete_ = true;
+            RCLCPP_INFO(get_logger(), "No eligible HGVD goal; returning to the start pose");
+            try_return(now);
+          }
+          else
+          {
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 10000,
+                                 "Cannot return until a valid start pose has been recorded");
+          }
+        }
       }
       return;
     }
@@ -681,7 +671,7 @@ private:
   }
 
   std::string robot_frame_;
-  double period_, completion_hold_, min_distance_, switch_margin_, goal_timeout_, retry_delay_;
+  double period_, min_distance_, switch_margin_, goal_timeout_, retry_delay_;
   double start_search_;
   int threshold_;
   bool return_enabled_;
@@ -698,7 +688,6 @@ private:
   std::optional<Geometry> geometry_;
   std::optional<ActiveGoal> active_;
   std::optional<Pose> start_pose_;
-  std::optional<double> frontier_free_since_;
   std::map<Cell, double> excluded_;
   std::size_t map_revision_ = 0, marker_revision_ = 0, goal_id_ = 0;
   MarkerArray static_markers_;

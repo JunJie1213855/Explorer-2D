@@ -24,9 +24,7 @@ def generate_launch_description():
         DeclareLaunchArgument('navigation_enabled', default_value='true',
                               description='Send Nav2 goals; set false to preview HGVD only'),
         DeclareLaunchArgument('return_to_start', default_value='false', choices=['true', 'false'],
-                              description='Return to the initial pose when exploration finishes'),
-        DeclareLaunchArgument('completion_hold_s', default_value='5.0',
-                              description='Seconds without reachable frontiers before returning'),
+                              description='Return to the initial pose when no eligible exploration goal remains'),
         DeclareLaunchArgument('unknown_start_search_m', default_value='0.25',
                               description='Bounded search for a free cell near an unknown robot pose'),
         DeclareLaunchArgument('min_goal_distance_m', default_value='0.35',
@@ -46,9 +44,6 @@ def generate_launch_description():
                 ),
                 'return_to_start': ParameterValue(
                     LaunchConfiguration('return_to_start'), value_type=bool,
-                ),
-                'completion_hold_s': ParameterValue(
-                    LaunchConfiguration('completion_hold_s'), value_type=float,
                 ),
                 'timing_csv': ParameterValue(LaunchConfiguration('timing_csv'), value_type=str),
                 'unknown_start_search_m': ParameterValue(

@@ -20,7 +20,7 @@ ros2 launch hgvd_exploration explore.launch.py \
   use_sim_time:=true rviz:=true return_to_start:=true
 ```
 
-`rviz` 和 `return_to_start` 默认关闭。`navigation_enabled:=false` 只预览图层。返航前要求没有活跃目标且连续 `completion_hold_s` 秒无可达前沿。Python 和 C++ 节点使用相同的目标动作和图层话题，同一个机器人一次使用一个版本。
+`rviz` 和 `return_to_start` 默认关闭。`navigation_enabled:=false` 只预览图层。启用返航后，当前导航目标结束且候选点通过筛选后为空时，立即尝试返回本轮记录的起点。距离过滤和失败冷却都可能使候选点列表为空。Python 和 C++ 节点使用相同的目标动作和图层话题，同一个机器人一次使用一个版本。
 
 当 SLAM 暂时将机器人所在格标为未知时，`unknown_start_search_m`（默认 0.25 米）允许从附近已知空闲格锚定拓扑。目标距离仍按真实 TF 位姿计算，导航仍由 Nav2 执行。设为 0 可关闭此行为。
 
