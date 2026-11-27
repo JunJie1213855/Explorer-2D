@@ -36,7 +36,6 @@ setup(
     maintainer_email="support.mertgulerx@gmail.com",
     description="ROS 2 Jazzy MRTSP frontier exploration package",
     license="Apache-2.0",
-    tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "mrtsp_explorer = mrtsp_exploration_ros2.explorer_node:main",
