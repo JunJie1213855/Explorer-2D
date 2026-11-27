@@ -94,6 +94,10 @@ Explorer-2D/
 | `/navigate_to_pose` | Nav2 导航动作服务器 |
 | `/clock` | 仿真时间，启用 `use_sim_time` 时使用 |
 
+不使用 Nav2、而用 topic 式规划控制（如 `astar_global_node` + `neupan_cpp_node`）时，
+先启动 `explore_nav_bridge` 提供 `/navigate_to_pose`，见
+[`src/explore_nav_bridge/README.md`](src/explore_nav_bridge/README.md)。
+
 ## 构建
 
 以下以 ROS 2 Humble 为例，在工作区根目录执行。需要先安装 ROS 2、`rosdep` 和 `colcon`，并完成 `rosdep` 初始化。
